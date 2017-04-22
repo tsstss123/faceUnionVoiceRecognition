@@ -12,6 +12,7 @@ from skimage import io
 from multiprocessing import Process, Value
 from pyaudio import PyAudio,paInt16
 from datetime import datetime
+from voiceRecord import *
 
 detector = dlib.get_frontal_face_detector()
 sp = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
@@ -19,9 +20,37 @@ facerec = dlib.face_recognition_model_v1('model/dlib_face_recognition_resnet_mod
 
 salt = ''.join(random.sample(string.digits, 8))
 
-def recorder(frame, state):
-    return 
-    
+def change_salt():
+    global salt
+    salt = ''.join(random.sample(string.digits, 8))
+
+def recorder(frame, state, name):
+    path = 'dataset/' + name + '/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    print(path)
+    state.value = 1
+    audio_filename = record_wave(prefix=path)
+    print(audio_filename, 'saved')
+    state.value = 2
+    dets = detector(frame, 1)
+    print('detect ' + str(len(dets)) + ' faces')
+    if len(dets) > 1 or len(dets) == 0:
+        print('fail')
+        return
+    for k, d in enumerate(dets):
+        shape = sp(frame, d)
+        face_descriptor = facerec.compute_face_descriptor(frame, shape, 20)
+        print(type(face_descriptor))
+        d_test = np.array(face_descriptor).astype(np.float64)
+    state.value = 3
+    with open(path + 'vector.txt', 'w') as fp:
+        for v in face_descriptor:
+            fp.write(str(v) + ' ')
+        fp.write(name + '\n')
+    print('output vector')
+    state.value = 4
+
 class MainApp(QWidget):
     
     def __init__(self):
@@ -32,6 +61,17 @@ class MainApp(QWidget):
         self.video_size = QSize(640, 480)
         self.setup_ui()
         self.setup_camera()
+        self.read_all_people()
+
+    def read_all_people(self):
+        self.people = []
+        self.people_path = 'dataset/peoplelist.txt'
+        with open(self.people_path, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line = line.strip()
+                self.people.append(line)
+                print('dataset has', line)
 
     def get_identify(self):
         font = QFont()
@@ -108,13 +148,16 @@ class MainApp(QWidget):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.flip(frame, 1)
 
-        proc = Process(target=recorder, args=(frame, self.checking_state, ))
+        proc = Process(target=recorder, args=(frame, self.checking_state, self.identify, ))
         proc.start()
     
     def write_face(self):
         """Write records to file
         """
-        pass 
+        if self.identify not in self.people:
+            self.people.append(self.identify)
+            with open(self.people_path, 'w') as f:
+                f.write(self.identify + '\n')
 
     def setup_camera(self):
         """Initialize camera.
@@ -150,12 +193,17 @@ class MainApp(QWidget):
                 self.check_button.setDisabled(True)
         elif self.checking_state.value == 1:
             self.text_label.setText('录音中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 2:
             self.text_label.setText('提取特征中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 3:
-            self.text_label.setText('识别中')
+            self.text_label.setText('保存中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 4:
             self.checking_state.value = 0
+            self.check_button.setEnabled(True)
+            self.write_button.setEnabled(True)
             change_salt()
 
         self.salt_label.setText(salt)

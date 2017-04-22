@@ -27,19 +27,24 @@ def change_salt():
 
 people = []
 
-def load_db(db_name = 'vector.txt'):
+def load_db():
     global people
-    with open(db_name, 'r') as f:
-        vector_list = f.readlines()
-    for x in vector_list:
-        x = x.strip()
-        people.append((np.array(x.split()[:-1]).astype(np.float64), x.split()[-1]))
-    print('load ' + str(len(people)) +' faces')
+    peoplelist_path = 'dataset/peoplelist.txt'
+    with open(peoplelist_path, 'r') as f:
+        namelist = f.readlines()
+    for name in namelist:
+        name = name.strip()
+        with open('dataset/' + name + '/vector.txt', 'r') as f:
+            vector_list = f.readlines()
+        for x in vector_list:
+            x = x.strip()
+            people.append((np.array(x.split()[:-1]).astype(np.float64), x.split()[-1]))
+    print('load ' + str(len(people)) +' vectors')
 
 def checker(frame, state):
     state.value = 1
     global people
-    audio_filename = record_wave()
+    audio_filename = record_wave(prefix='dataset/tmp/')
     print(audio_filename, 'saved')
     load_db()
     state.value = 2
@@ -63,27 +68,32 @@ def checker(frame, state):
         if D < maxlike:
             pname = p[1]
             maxlike = D
-    os.chdir(r'wav')
-    train_file = r'train\01_32468975.wav'
-    args = [
-        r'vpr.exe',
-        train_file,
-        os.path.abspath(audio_filename)
-    ]
-    audio_p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    audio_p.wait()
-    audio_tho = audio_p.stdout.readlines()
-    audio_tho = float(audio_tho[0][:-1])
+    #os.chdir(r'wav')
+    #train_file = r'train\01_32468975.wav'
+
     pass_flag = False
     if maxlike < 0.4:
-        print(pname)
-        pass_flag = True
+        os.chdir('dataset')
+        args = ['vpr.exe']
+        for fname in os.listdir(pname):
+            if '.wav' in fname:
+                args.append(os.path.abspath(pname + '/' + fname))
+                # print('train file ', os.path.abspath(pname + '/' + fname))
+        args.append('tmp/' + audio_filename)
+        # print('test flie ', 'tmp/' + audio_filename)
+        audio_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+        audio_p.wait()
+        audio_tho = audio_p.stdout.readlines()
+        audio_tho = float(audio_tho[0][:-1])
+        if audio_tho < 1:
+            pass_flag = True
     else:
         print('no people in library')
         pass_flag = False
+    
     if pass_flag:
         title = "认证通过"
-        pname = pname.split('_')[0]
+        pname = pname
     else:
         title = "认证失败"
         pname = "认证失败"
@@ -186,12 +196,16 @@ class MainApp(QWidget):
                 self.check_button.setDisabled(True)
         elif self.checking_state.value == 1:
             self.text_label.setText('录音中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 2:
             self.text_label.setText('提取特征中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 3:
             self.text_label.setText('识别中')
+            self.check_button.setDisabled(True)
         elif self.checking_state.value == 4:
             self.checking_state.value = 0
+            self.check_button.setEnabled(True)
             change_salt()
 
         self.salt_label.setText(salt)
