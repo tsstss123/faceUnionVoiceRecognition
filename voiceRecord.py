@@ -1,8 +1,8 @@
 from pyaudio import PyAudio,paInt16
 from datetime import datetime
-import wave
+import wave, os
 
-TIME = 10
+TIME = 6
 NUM_SAMPLES = 2000  
 framerate = 16000  
 channels = 1  
@@ -20,11 +20,9 @@ def save_wave_file(filename, data):
     wf.writeframes(b"".join(data))
     wf.close()
 
-def record_wave(filename=""):
+def record_wave(filename='', prefix='wav/'):
     '''open the input of wave
     '''
-    TIME = 10
-    NUM_SAMPLES = 2000
     pa = PyAudio()
     stream = pa.open(format = paInt16, channels = 1,
                     rate = framerate, input = True, 
@@ -37,10 +35,9 @@ def record_wave(filename=""):
         count += 1
         print('recording...')
 
-    # filename = datetime.now().strftime("%Y-%m-%d_%H_%M_%S")+".wav"
-    if filename == "":
+    if filename == '':
         filename = datetime.now().strftime("%Y-%m-%d_%H_%M_%S")
     filename += ".wav"
-    save_wave_file('wav\\' + filename, save_buffer)
+    save_wave_file(os.path.join(prefix, filename), save_buffer)
     save_buffer = []
     return filename
