@@ -15,21 +15,18 @@ from multiprocessing import Process, Value
 from datetime import datetime
 from voiceRecord import *
 
-
 detector = dlib.get_frontal_face_detector()
 sp = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
 facerec = dlib.face_recognition_model_v1('model/dlib_face_recognition_resnet_model_v1.dat')
 
 salt = ''.join(random.sample(string.digits, 8))
 
-
 def change_salt():
     global salt
     salt = ''.join(random.sample(string.digits, 8))
 
-
-
 people = []
+
 def load_db(db_name = 'vector.txt'):
     global people
     with open(db_name, 'r') as f:
