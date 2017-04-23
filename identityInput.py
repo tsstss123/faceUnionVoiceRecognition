@@ -14,15 +14,15 @@ from pyaudio import PyAudio,paInt16
 from datetime import datetime
 from voiceRecord import *
 
-detector = dlib.get_frontal_face_detector()
-sp = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
-facerec = dlib.face_recognition_model_v1('model/dlib_face_recognition_resnet_model_v1.dat')
-
-salt = ''.join(random.sample(string.digits, 8))
+salt = ''.join(random.sample(string.digits[2:], 8))
 
 def change_salt():
     global salt
-    salt = ''.join(random.sample(string.digits, 8))
+    salt = ''.join(random.sample(string.digits[2:], 8))
+
+detector = dlib.get_frontal_face_detector()
+sp = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
+facerec = dlib.face_recognition_model_v1('model/dlib_face_recognition_resnet_model_v1.dat')
 
 def recorder(frame, state, name):
     path = 'dataset/' + name + '/'
@@ -44,7 +44,7 @@ def recorder(frame, state, name):
         print(type(face_descriptor))
         d_test = np.array(face_descriptor).astype(np.float64)
     state.value = 3
-    with open(path + 'vector.txt', 'w') as fp:
+    with open(path + 'vector.txt', 'a') as fp:
         for v in face_descriptor:
             fp.write(str(v) + ' ')
         fp.write(name + '\n')
@@ -156,7 +156,7 @@ class MainApp(QWidget):
         """
         if self.identify not in self.people:
             self.people.append(self.identify)
-            with open(self.people_path, 'w') as f:
+            with open(self.people_path, 'a') as f:
                 f.write(self.identify + '\n')
 
     def setup_camera(self):

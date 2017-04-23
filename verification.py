@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-#from PySide.QtCore import *
-#from PySide.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -19,11 +17,11 @@ detector = dlib.get_frontal_face_detector()
 sp = dlib.shape_predictor('model/shape_predictor_68_face_landmarks.dat')
 facerec = dlib.face_recognition_model_v1('model/dlib_face_recognition_resnet_model_v1.dat')
 
-salt = ''.join(random.sample(string.digits, 8))
+salt = ''.join(random.sample(string.digits[2:], 8))
 
 def change_salt():
     global salt
-    salt = ''.join(random.sample(string.digits, 8))
+    salt = ''.join(random.sample(string.digits[2:], 8))
 
 people = []
 
@@ -60,18 +58,17 @@ def checker(frame, state):
         d_test = np.array(face_descriptor).astype(np.float64)
     state.value = 3
     maxlike = 1e8
+    audio_tho = random.uniform(0,0.5)
     pname = 'MATCH FAIL'
     print(len(people), 'need to match')
     for p in people:
         D = np.linalg.norm(p[0] - d_test)
-        # print('D to ' + p[1] + ' = ' + str(D))
         if D < maxlike:
             pname = p[1]
             maxlike = D
-    #os.chdir(r'wav')
-    #train_file = r'train\01_32468975.wav'
 
     pass_flag = False
+    
     if maxlike < 0.4:
         os.chdir('dataset')
         args = ['vpr.exe']
@@ -85,7 +82,7 @@ def checker(frame, state):
         audio_p.wait()
         audio_tho = audio_p.stdout.readlines()
         audio_tho = float(audio_tho[0][:-1])
-        if audio_tho < 1:
+        if audio_tho > 1:
             pass_flag = True
     else:
         print('no people in library')
@@ -108,10 +105,11 @@ class MainApp(QWidget):
     def __init__(self):
         QWidget.__init__(self)
         self.checking_state = Value('i', 0)
+        self.setWindowTitle('身份识别认证')
         self.video_size = QSize(640, 480)
         self.setup_ui()
         self.setup_camera()
-        
+
     def setup_ui(self):
         """Initialize widgets.
         """
@@ -134,12 +132,12 @@ class MainApp(QWidget):
 
         button_font = QFont()
         button_font.setPointSize(18)
-        self.check_button = QPushButton("Check Face")
+        self.check_button = QPushButton("认证")
         self.check_button.setFont(button_font)
         self.check_button.setDisabled(True)
         self.check_button.clicked.connect(self.check_face)
 
-        self.quit_button = QPushButton("Quit")
+        self.quit_button = QPushButton("退出")
         self.quit_button.setFont(button_font)
         self.quit_button.clicked.connect(self.close)
 
