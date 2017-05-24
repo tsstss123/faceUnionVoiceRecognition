@@ -2,7 +2,7 @@ from pyaudio import PyAudio,paInt16
 from datetime import datetime
 import wave, os
 
-TIME = 6
+TIME = 5
 NUM_SAMPLES = 2000  
 framerate = 16000  
 channels = 1  

@@ -54,7 +54,7 @@ def checker(frame, state):
     for k, d in enumerate(dets):
         shape = sp(frame, d)
         face_descriptor = facerec.compute_face_descriptor(frame, shape, 10)
-        print(type(face_descriptor))
+        #print(type(face_descriptor))
         d_test = np.array(face_descriptor).astype(np.float64)
     state.value = 3
     maxlike = 1e8
@@ -156,6 +156,8 @@ class MainApp(QWidget):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.flip(frame, 1)
 
+        change_salt()
+        
         proc = Process(target=checker, args=(frame, self.checking_state, ))
         proc.start()
 
