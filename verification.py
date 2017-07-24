@@ -116,32 +116,18 @@ faceMousePointYQueue = VectorQueue(dim = 20, len = CAMERA_FPS / 2)
 def draw_rectangle(frame, det, color=(100, 200, 100)):
     cv2.rectangle(frame, (det.left(), det.top()), (det.right(), det.bottom()), color)
 
+def draw_two_shape(frame, shape_left, shape_right, limit=68):
+    for i in range(min(limit, shape_left.num_parts)):
+        oriu = (shape_left.part(i).x, shape_left.part(i).y)
+        oriv = (shape_right.part(i).x, shape_right.part(i).y)
+        c = (0, 0, 255)
+        cv2.line(frame, oriu, oriv, c) 
+
 def draw_point_line(frame, det, color=(100, 230, 110)):
     shape = sp(frame, det)
     dicout = {49:59, 50:58, 51:57, 52:56, 53:55}
     dicin = {61:67, 62:66, 63:65}
     dicx = {48:54}
-
-    faceVecX = np.zeros(68)
-    faceVecY = np.zeros(68)
-    mouseVecX = np.zeros(20)
-    mouseVecY = np.zeros(20)
-
-    for i in range(68):
-        faceVecX[i] = shape.part(i).x
-        faceVecY[i] = shape.part(i).y
-        if i >= 48:
-            mouseVecX[i - 48] = shape.part(i).x
-            mouseVecY[i - 48] = shape.part(i).y
-
-    faceAllPointXQueue.push(faceVecX)
-    faceAllPointYQueue.push(faceVecY)
-
-    faceMousePointXQueue.push(mouseVecX)
-    faceMousePointYQueue.push(mouseVecY)
-
-    # print(np.sum(faceAllPointXQueue.var()) / 68)
-    print(np.sum(faceMousePointYQueue.var()) / 20)
 
     for i in range(shape.num_parts):
         cv2.circle(frame, (shape.part(i).x, shape.part(i).y), 2, (250, 40, 80))
@@ -197,19 +183,20 @@ def lips_motion_checker(video):
     frame_cnt = 0
     faceRect = None
 
+    dicout = {49:59, 50:58, 51:57, 52:56, 53:55}
+    dicin = {61:67, 62:66, 63:65}
+    dicx = {48:54}
+
     # lips activity detection windows set to half second
-    mouseYQueue = VectorQueue(20, CAMERA_FPS / 2)
+    mouseYQueue = VectorQueue(dim = 9, len = CAMERA_FPS / 2)
 
     for f in frames:
         leftframe = f[:, :1280, :]
-        outleft.write(leftframe)
-        lefteye.append(leftframe)
+        # lefteye.append(leftframe)
 
         rightframe = f[:, 1280:, :]
-        outright.write(rightframe)
-        righteye.append(rightframe)
-        
-        
+        # righteye.append(rightframe)
+
         if frame_cnt % CAMERA_FPS == 0:
             dets = detector(leftframe, 1)
             if len(dets) != 1:
@@ -218,11 +205,18 @@ def lips_motion_checker(video):
             faceRect = dets[0]
 
         shape = sp(leftframe, faceRect)
-        vec = np.zeros(20)
-        for i in range(48, 68):
-            vec[i - 48] = shape.part(i).y
+        draw_point_line(leftframe, faceRect)
+        vec = np.zeros(9)
+        for i in range(5):
+            vec[i] = shape.part(59 - i).y - shape.part(49 + i).y
+        for i in range(3):
+            vec[5 + i] = shape.part(67 - i).y - shape.part(61 + i).y
         mouseYQueue.push(vec)
         print('var = ', np.sum(mouseYQueue.var()))
+
+        outleft.write(leftframe)
+        outright.write(rightframe)
+
         frame_cnt += 1
 
     outleft.release()
@@ -235,18 +229,16 @@ class MainApp(QWidget):
         QWidget.__init__(self)
         self.checking_state = Value('i', 0)
         self.setWindowTitle('身份识别认证')
-        self.video_size = QSize(800, 480)
+        self.video_size = QSize(1600, 450)
         self.setup_ui()
         self.setup_camera()
 
     def setup_ui(self):
         """Initialize widgets.
         """
-        self.image_left_label = QLabel()
-        self.image_right_label = QLabel()
-        self.image_left_label.setFixedSize(self.video_size)
-        self.image_right_label.setFixedSize(self.video_size)
-        # self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(self.video_size)
+        self.image_label.setAlignment(Qt.AlignCenter)
 
         text_label_font = QFont()
         text_label_font.setBold(True)
@@ -273,12 +265,9 @@ class MainApp(QWidget):
         self.quit_button.clicked.connect(self.close)
 
 
-        self.image_layout = QHBoxLayout()
-        self.image_layout.addWidget(self.image_left_label)
-        self.image_layout.addWidget(self.image_right_label)
 
         self.main_layout = QVBoxLayout()
-        self.main_layout.addLayout(self.image_layout)
+        self.main_layout.addWidget(self.image_label)
         self.main_layout.addWidget(self.text_label)
         self.main_layout.addWidget(self.salt_label)
         self.main_layout.addWidget(self.check_button)
@@ -292,6 +281,7 @@ class MainApp(QWidget):
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.flip(frame, 1)
 
+        logger.info('get frame & start checker thread')
         change_salt()
 
         # proc = Process(target=checker, args=(frame, self.checking_state, ))
@@ -309,35 +299,58 @@ class MainApp(QWidget):
 
         self.checking_state.value = 0
 
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.display_video_stream)
-        self.timer.start(200)
+        self.timer_flush_video = QTimer()
+        self.timer_flush_video.timeout.connect(self.flush_video_display)
+        self.timer_flush_video.start(100)
 
-    def display_video_stream(self):
+        self.timer_flush_status = QTimer()
+        self.timer_flush_status.timeout.connect(self.flush_status)
+        self.timer_flush_status.start(2000)
+
+        self.dets = []
+
+    def flush_video_display(self):
+        """paint to QLabel Widget
+        """
+        _, frame = self.capture.read()
+
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame = cv2.flip(frame, 1)
+
+        frame = cv2.resize(frame, (1600, 450))
+
+        if len(self.dets) == 2:
+            for k, d in enumerate(self.dets):
+                cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (0, 255, 0))
+            shape_left = sp(frame, self.dets[0])
+            shape_right = sp(frame, self.dets[1])
+            draw_two_shape(frame, shape_left, shape_right, 30)
+
+        image = QImage(frame.tobytes(), frame.shape[1], frame.shape[0], QImage.Format_RGB888)
+
+        self.image_label.setPixmap(QPixmap.fromImage(image))
+
+    def flush_status(self):
         """Read frame from camera and repaint QLabel widget.
         """
         _, frame = self.capture.read()
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.flip(frame, 1)
-        height = frame.shape[0]
-        weight = frame.shape[1]
-        # dets = detector(frame, 1)
-        # dets = []
-        # for k, d in enumerate(dets):
-            # print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(k, d.left(), d.top(), d.right(), d.bottom()))
-            # cv2.rectangle(frame, (d.left(), d.top()), (d.right(), d.bottom()), (0, 255, 0))
 
-        frame_left = frame[:, :1280, :]
-        # cv2.rectangle(frame_left, (390, 610), (890, 110), (0, 255, 0))
-        frame_right = frame[:, 1280:, :]
-        # cv2.rectangle(frame_right, (390, 610), (890, 110), (0, 255, 0))
+        frame = cv2.resize(frame, (1600,450))
+        self.dets = detector(frame, 1)
         
-        # image = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
-        frame_left = cv2.resize(frame_left, (800, 480))
-        frame_right = cv2.resize(frame_right, (800, 480))
+        # frame_left = frame[:, :1280, :]
+        # cv2.rectangle(frame_left, (390, 610), (890, 110), (0, 255, 0))
+        # frame_right = frame[:, 1280:, :]
+        # cv2.rectangle(frame_right, (390, 610), (890, 110), (0, 255, 0))
 
-        dets_left = dlib.rectangle(left=250,right=550,top=90,bottom=390)
+        # image = QImage(frame, frame.shape[1], frame.shape[0], QImage.Format_RGB888)
+        # frame_left = cv2.resize(frame_left, (800, 480))
+        # frame_right = cv2.resize(frame_right, (800, 480))
+
+        # dets_left = dlib.rectangle(left=250,right=550,top=90,bottom=390)
         # dets = detector(frame_left, 1)
         # for k, d in enumerate(dets):
             # print("Detection {}: Left: {} Top: {} Right: {} Bottom: {}".format(k, d.left(), d.top(), d.right(), d.bottom()))
@@ -346,11 +359,11 @@ class MainApp(QWidget):
             # newrec = dlib.rectangle(left=d.left()-43,bottom=d.bottom()-53,right=d.right()-40,top=d.top()-20)
             # draw_rectangle(frame_left, newrec, (0, 255, 200))
             # draw_point_line(frame_left, newrec)
-        draw_rectangle(frame_left, dets_left)
-        draw_point_line(frame_left, dets_left)
+        # draw_rectangle(frame_left, dets_left)
+        # draw_point_line(frame_left, dets_left)
 
-        image_left = QImage(frame_left.tobytes(), frame_left.shape[1], frame_left.shape[0], QImage.Format_RGB888)
-        image_right = QImage(frame_right.tobytes(), frame_right.shape[1], frame_right.shape[0], QImage.Format_RGB888)
+        # image_left = QImage(frame_left.tobytes(), frame_left.shape[1], frame_left.shape[0], QImage.Format_RGB888)
+        # image_right = QImage(frame_right.tobytes(), frame_right.shape[1], frame_right.shape[0], QImage.Format_RGB888)
 
         if self.checking_state.value == 0:
             # if len(dets) == 1:
@@ -374,8 +387,8 @@ class MainApp(QWidget):
             change_salt()
 
         self.salt_label.setText(salt)
-        self.image_left_label.setPixmap(QPixmap.fromImage(image_left))
-        self.image_right_label.setPixmap(QPixmap.fromImage(image_right))
+        # self.image_left_label.setPixmap(QPixmap.fromImage(image_left))
+        # self.image_right_label.setPixmap(QPixmap.fromImage(image_right))
 
 if __name__ == "__main__":
 
